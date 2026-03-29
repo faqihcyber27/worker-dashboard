@@ -17,14 +17,6 @@ export default {
         return login(request, env)
       }
 
-      if (url.pathname === "/debug/login") {
-  const users = await env.DB.prepare("SELECT * FROM users").all()
-
-  return json({
-    users
-  })
-      }
-
       // ================= PROTECTED =================
       let user
       try {
@@ -84,95 +76,7 @@ function forbidden() {
   return json({ error: "Forbidden" }, 403)
 }
 
-// ================= HASH =================
-
-async function hashPassword(password) {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(password)
-
-  const hash = await crypto.subtle.digest("SHA-256", data)
-
-  return Array.from(new Uint8Array(hash))
-    .map(b => b.toString(16).padStart(2, "0"))
-    .join("")
-}
-
-// ================= JWT =================
-
-async function generateJWT(payload, env) {
-  const secret = env.JWT_SECRET
-  const encoder = new TextEncoder()
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  )
-
-  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))
-  const body = btoa(JSON.stringify(payload))
-
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(`${header}.${body}`)
-  )
-
-  const sig = btoa(String.fromCharCode(...new Uint8Array(signature)))
-
-  return `${header}.${body}.${sig}`
-}
-
-async function verifyJWT(token, env) {
-  const secret = env.JWT_SECRET
-  const [header, body, signature] = token.split(".")
-
-  if (!header || !body || !signature) {
-    throw new Error("Invalid token")
-  }
-
-  const encoder = new TextEncoder()
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["verify"]
-  )
-
-  const valid = await crypto.subtle.verify(
-    "HMAC",
-    key,
-    Uint8Array.from(atob(signature), c => c.charCodeAt(0)),
-    encoder.encode(`${header}.${body}`)
-  )
-
-  if (!valid) throw new Error("Invalid token")
-
-  const payload = JSON.parse(atob(body))
-
-  if (payload.exp < Math.floor(Date.now() / 1000)) {
-    throw new Error("Token expired")
-  }
-
-  return payload
-}
-
-async function auth(request, env) {
-  const authHeader = request.headers.get("Authorization")
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("Unauthorized")
-  }
-
-  const token = authHeader.split(" ")[1]
-  return verifyJWT(token, env)
-}
-
-// ================= AUTH =================
+// ================= AUTH SIMPLE =================
 
 async function register(request, env) {
   const { name, email, password } = await request.json()
@@ -182,12 +86,12 @@ async function register(request, env) {
   }
 
   const cleanEmail = email.trim().toLowerCase()
-  const hashed = await hashPassword(password)
+  const cleanPassword = password.trim()
 
   try {
     await env.DB.prepare(
       "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)"
-    ).bind(name, cleanEmail, hashed, "user").run()
+    ).bind(name, cleanEmail, cleanPassword, "user").run()
 
     return json({ message: "Registered" })
 
@@ -204,8 +108,8 @@ async function login(request, env) {
   }
 
   const cleanEmail = email.trim().toLowerCase()
+  const cleanPassword = password.trim()
 
-  // 🔥 ambil user dulu
   const user = await env.DB.prepare(
     "SELECT * FROM users WHERE email = ?"
   ).bind(cleanEmail).first()
@@ -214,20 +118,37 @@ async function login(request, env) {
     return json({ error: "Email tidak ditemukan" }, 404)
   }
 
-  const hashed = await hashPassword(password)
-
-  // 🔥 compare di JS
-  if (user.password !== hashed) {
+  if (user.password !== cleanPassword) {
     return json({ error: "Password salah" }, 401)
   }
 
-  const token = await generateJWT({
-    id: user.id,
-    role: user.role,
-    exp: Math.floor(Date.now() / 1000) + 3600
-  }, env)
+  // 🔥 simple token
+  const token = btoa(user.email + ":" + Date.now())
 
-  return json({ token, role: user.role })
+  await env.DB.prepare(
+    "UPDATE users SET token = ? WHERE id = ?"
+  ).bind(token, user.id).run()
+
+  return json({
+    token,
+    role: user.role
+  })
+}
+
+async function auth(request, env) {
+  const authHeader = request.headers.get("Authorization")
+
+  if (!authHeader) throw new Error("Unauthorized")
+
+  const token = authHeader.split(" ")[1]
+
+  const user = await env.DB.prepare(
+    "SELECT * FROM users WHERE token = ?"
+  ).bind(token).first()
+
+  if (!user) throw new Error("Unauthorized")
+
+  return user
 }
 
 // ================= VM =================
