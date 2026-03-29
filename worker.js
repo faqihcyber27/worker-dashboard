@@ -1,13 +1,5 @@
 // ================= HELPER =================
 
-async function hashPassword(password){
-  const enc = new TextEncoder()
-  const buffer = await crypto.subtle.digest("SHA-256", enc.encode(password))
-  return Array.from(new Uint8Array(buffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
 function json(data, status = 200){
   return new Response(JSON.stringify(data), {
     status,
@@ -39,9 +31,12 @@ export default {
 
     const url = new URL(request.url)
 
+    // 🔥 ambil role dari header
+    const role = request.headers.get("role") || "user"
+
     try{
 
-      // ================= GET VM =================
+      // ================= GET =================
       if(url.pathname === "/vms" && request.method === "GET"){
         const data = await env.DB.prepare(
           "SELECT * FROM vms ORDER BY id DESC"
@@ -53,6 +48,11 @@ export default {
         }))
 
         return json(result)
+      }
+
+      // 🔒 NON ADMIN BLOCK
+      if(role !== "admin"){
+        return json({error:"Forbidden"},403)
       }
 
       // ================= CREATE =================
