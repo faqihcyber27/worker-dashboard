@@ -2,7 +2,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url)
 
-    // CORS preflight
+    // CORS
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: cors() })
     }
@@ -21,7 +21,7 @@ export default {
       let user
       try {
         user = await auth(request, env)
-      } catch (err) {
+      } catch {
         return json({ error: "Unauthorized" }, 401)
       }
 
@@ -122,7 +122,7 @@ async function verifyJWT(token, env) {
   const [header, body, signature] = token.split(".")
 
   if (!header || !body || !signature) {
-    throw new Error("Invalid token format")
+    throw new Error("Invalid token")
   }
 
   const encoder = new TextEncoder()
@@ -173,12 +173,13 @@ async function register(request, env) {
     return json({ error: "Missing fields" }, 400)
   }
 
+  const cleanEmail = email.trim().toLowerCase()
   const hashed = await hashPassword(password)
 
   try {
     await env.DB.prepare(
       "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)"
-    ).bind(name, email, hashed, "user").run()
+    ).bind(name, cleanEmail, hashed, "user").run()
 
     return json({ message: "Registered" })
 
@@ -194,14 +195,22 @@ async function login(request, env) {
     return json({ error: "Missing credentials" }, 400)
   }
 
-  const hashed = await hashPassword(password)
+  const cleanEmail = email.trim().toLowerCase()
 
+  // 🔥 ambil user dulu
   const user = await env.DB.prepare(
-    "SELECT * FROM users WHERE email = ? AND password = ?"
-  ).bind(email, hashed).first()
+    "SELECT * FROM users WHERE email = ?"
+  ).bind(cleanEmail).first()
 
   if (!user) {
-    return json({ error: "Invalid login" }, 401)
+    return json({ error: "Email tidak ditemukan" }, 404)
+  }
+
+  const hashed = await hashPassword(password)
+
+  // 🔥 compare di JS
+  if (user.password !== hashed) {
+    return json({ error: "Password salah" }, 401)
   }
 
   const token = await generateJWT({
