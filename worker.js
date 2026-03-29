@@ -36,7 +36,12 @@ export default {
 
         return json({
           token:"ok",
-          role:user.role
+          role:user.role,
+          user:{
+            name: user.name,
+            email: user.email,
+            role: user.role
+          }
         })
       }
 
