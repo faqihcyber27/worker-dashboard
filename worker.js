@@ -33,6 +33,7 @@ function cors(){
 export default {
   async fetch(request, env){
 
+    // CORS
     if(request.method === "OPTIONS"){
       return new Response(null,{headers:cors()})
     }
@@ -52,7 +53,7 @@ export default {
           "SELECT email FROM users WHERE email=?"
         ).bind(cleanEmail).first()
 
-        if(exist) return json({error:"Email sudah ada"})
+        if(exist) return json({error:"Email sudah terdaftar"})
 
         const hash = await hashPassword(cleanPassword)
 
@@ -91,7 +92,7 @@ export default {
         })
       }
 
-      // ================= GET VM =================
+      // ================= GET ALL VM =================
       if(url.pathname === "/vms" && request.method === "GET"){
         const data = await env.DB.prepare(
           "SELECT * FROM vms ORDER BY id DESC"
@@ -109,12 +110,10 @@ export default {
       if(url.pathname === "/vms" && request.method === "POST"){
         const vm = await request.json()
 
-        console.log("VM INPUT:", vm)
-
         await env.DB.prepare(`
           INSERT INTO vms 
-          (name, ip, function, cluster, host, cpu, memory, os, vlan, storage, disk, environment)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (name, ip, function, cluster, host, cpu, memory, os, vlan, storage, disk, environment, platform)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           vm.name || "",
           vm.ip || "",
@@ -127,10 +126,40 @@ export default {
           vm.vlan || "",
           vm.storage || "",
           JSON.stringify(vm.disk || []),
-          vm.environment || ""
+          vm.environment || "",
+          vm.platform || ""
         ).run()
 
         return json({message:"VM created"})
+      }
+
+      // ================= UPDATE VM =================
+      if(url.pathname.startsWith("/vms/") && request.method === "PUT"){
+        const id = url.pathname.split("/").pop()
+        const vm = await request.json()
+
+        await env.DB.prepare(`
+          UPDATE vms SET 
+          name=?, ip=?, function=?, cluster=?, host=?, cpu=?, memory=?, os=?, vlan=?, storage=?, disk=?, environment=?, platform=?
+          WHERE id=?
+        `).bind(
+          vm.name || "",
+          vm.ip || "",
+          vm.function || "",
+          vm.cluster || "",
+          vm.host || "",
+          vm.cpu || "",
+          vm.memory || "",
+          vm.os || "",
+          vm.vlan || "",
+          vm.storage || "",
+          JSON.stringify(vm.disk || []),
+          vm.environment || "",
+          vm.platform || "",
+          id
+        ).run()
+
+        return json({message:"Updated"})
       }
 
       // ================= DELETE VM =================
