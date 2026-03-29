@@ -91,13 +91,13 @@ export default {
         })
       }
 
-      // ================= GET VMS =================
+      // ================= GET VM =================
       if(url.pathname === "/vms" && request.method === "GET"){
         const data = await env.DB.prepare(
           "SELECT * FROM vms ORDER BY id DESC"
         ).all()
 
-        const result = data.results.map(vm => ({
+        const result = (data.results || []).map(vm => ({
           ...vm,
           disk: vm.disk ? JSON.parse(vm.disk) : []
         }))
@@ -109,54 +109,28 @@ export default {
       if(url.pathname === "/vms" && request.method === "POST"){
         const vm = await request.json()
 
+        console.log("VM INPUT:", vm)
+
         await env.DB.prepare(`
           INSERT INTO vms 
           (name, ip, function, cluster, host, cpu, memory, os, vlan, storage, disk, environment)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
-          vm.name,
-          vm.ip,
-          vm.function,
-          vm.cluster,
-          vm.host,
-          vm.cpu,
-          vm.memory,
-          vm.os,
-          vm.vlan,
-          vm.storage,
-          JSON.stringify(vm.disk),
-          vm.environment
+          vm.name || "",
+          vm.ip || "",
+          vm.function || "",
+          vm.cluster || "",
+          vm.host || "",
+          vm.cpu || "",
+          vm.memory || "",
+          vm.os || "",
+          vm.vlan || "",
+          vm.storage || "",
+          JSON.stringify(vm.disk || []),
+          vm.environment || ""
         ).run()
 
         return json({message:"VM created"})
-      }
-
-      // ================= UPDATE VM =================
-      if(url.pathname.startsWith("/vms/") && request.method === "PUT"){
-        const id = url.pathname.split("/").pop()
-        const vm = await request.json()
-
-        await env.DB.prepare(`
-          UPDATE vms SET
-          name=?, ip=?, function=?, cluster=?, host=?, cpu=?, memory=?, os=?, vlan=?, storage=?, disk=?, environment=?
-          WHERE id=?
-        `).bind(
-          vm.name,
-          vm.ip,
-          vm.function,
-          vm.cluster,
-          vm.host,
-          vm.cpu,
-          vm.memory,
-          vm.os,
-          vm.vlan,
-          vm.storage,
-          JSON.stringify(vm.disk),
-          vm.environment,
-          id
-        ).run()
-
-        return json({message:"Updated"})
       }
 
       // ================= DELETE VM =================
