@@ -17,6 +17,14 @@ export default {
         return login(request, env)
       }
 
+      if (url.pathname === "/debug/login") {
+  const users = await env.DB.prepare("SELECT * FROM users").all()
+
+  return json({
+    users
+  })
+      }
+
       // ================= PROTECTED =================
       let user
       try {
