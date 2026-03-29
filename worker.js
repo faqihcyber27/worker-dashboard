@@ -141,6 +141,45 @@ export default {
 
         return json({msg:"updated"})
       }
+      
+      // BULK INSERT
+if(url.pathname === "/vms/bulk" && request.method === "POST"){
+
+  const role = request.headers.get("role") || "user"
+  if(role !== "admin"){
+    return json({error:"Forbidden"},403)
+  }
+
+  const data = await request.json()
+
+  const stmt = env.DB.prepare(`
+    INSERT INTO vms 
+    (name, ip, function, cluster, host, cpu, memory, os, vlan, storage, disk, environment, platform)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+
+  const batch = data.map(vm =>
+    stmt.bind(
+      vm.name||"",
+      vm.ip||"",
+      vm.function||"",
+      vm.cluster||"",
+      vm.host||"",
+      vm.cpu||"",
+      vm.memory||"",
+      vm.os||"",
+      vm.vlan||"",
+      vm.storage||"",
+      JSON.stringify(vm.disk||[]),
+      vm.environment||"",
+      vm.platform||""
+    )
+  )
+
+  await env.DB.batch(batch)
+
+  return json({msg:"bulk insert success"})
+}
 
       // DELETE
       if(url.pathname.startsWith("/vms/") && request.method === "DELETE"){
