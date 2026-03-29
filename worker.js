@@ -33,7 +33,6 @@ function cors(){
 export default {
   async fetch(request, env){
 
-    // CORS
     if(request.method === "OPTIONS"){
       return new Response(null,{headers:cors()})
     }
@@ -42,57 +41,7 @@ export default {
 
     try{
 
-      // ================= REGISTER =================
-      if(url.pathname === "/register" && request.method === "POST"){
-        const {name,email,password} = await request.json()
-
-        const cleanEmail = email.trim().toLowerCase()
-        const cleanPassword = password.trim()
-
-        const exist = await env.DB.prepare(
-          "SELECT email FROM users WHERE email=?"
-        ).bind(cleanEmail).first()
-
-        if(exist) return json({error:"Email sudah terdaftar"})
-
-        const hash = await hashPassword(cleanPassword)
-
-        await env.DB.prepare(
-          "INSERT INTO users (name,email,password,role) VALUES (?,?,?,?)"
-        ).bind(name,cleanEmail,hash,"user").run()
-
-        return json({message:"Register berhasil"})
-      }
-
-      // ================= LOGIN =================
-      if(url.pathname === "/login" && request.method === "POST"){
-        const {email,password} = await request.json()
-
-        const cleanEmail = email.trim().toLowerCase()
-        const cleanPassword = password.trim()
-
-        const user = await env.DB.prepare(
-          "SELECT * FROM users WHERE email=?"
-        ).bind(cleanEmail).first()
-
-        if(!user) return json({error:"User tidak ditemukan"})
-
-        const hash = await hashPassword(cleanPassword)
-
-        if(user.password !== hash){
-          return json({error:"Password salah"})
-        }
-
-        return json({
-          user:{
-            name:user.name,
-            email:user.email,
-            role:user.role || "user"
-          }
-        })
-      }
-
-      // ================= GET ALL VM =================
+      // ================= GET VM =================
       if(url.pathname === "/vms" && request.method === "GET"){
         const data = await env.DB.prepare(
           "SELECT * FROM vms ORDER BY id DESC"
@@ -106,7 +55,7 @@ export default {
         return json(result)
       }
 
-      // ================= CREATE VM =================
+      // ================= CREATE =================
       if(url.pathname === "/vms" && request.method === "POST"){
         const vm = await request.json()
 
@@ -130,10 +79,10 @@ export default {
           vm.platform || ""
         ).run()
 
-        return json({message:"VM created"})
+        return json({message:"Created"})
       }
 
-      // ================= UPDATE VM =================
+      // ================= UPDATE =================
       if(url.pathname.startsWith("/vms/") && request.method === "PUT"){
         const id = url.pathname.split("/").pop()
         const vm = await request.json()
@@ -162,7 +111,7 @@ export default {
         return json({message:"Updated"})
       }
 
-      // ================= DELETE VM =================
+      // ================= DELETE =================
       if(url.pathname.startsWith("/vms/") && request.method === "DELETE"){
         const id = url.pathname.split("/").pop()
 
